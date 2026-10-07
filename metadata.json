@@ -1,0 +1,6 @@
+{
+  "name": "Finanza - Gestão Financeira Pessoal",
+  "description": "Controle financeiro pessoal inteligente com foco em despesas domésticas, reserva de emergência e investimentos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

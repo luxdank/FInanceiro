@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial income or expense transaction",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "description": { "type": "string", "maxLength": 200 },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense", "investment_deposit", "investment_withdraw", "emergency_deposit", "emergency_withdraw"] },
+        "categoryId": { "type": "string" },
+        "date": { "type": "string" },
+        "accountId": { "type": "string" },
+        "creditCardId": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "expenseType": { "type": "string" },
+        "isRecurring": { "type": "boolean" },
+        "recurrence": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "description", "amount", "type", "date"]
+    },
+    "BankAccount": {
+      "title": "BankAccount",
+      "description": "User bank account or wallet",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string" },
+        "institution": { "type": "string", "maxLength": 100 },
+        "balance": { "type": "number" },
+        "color": { "type": "string" }
+      },
+      "required": ["userId", "name", "balance"]
+    },
+    "CreditCard": {
+      "title": "CreditCard",
+      "description": "User credit card",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "institution": { "type": "string", "maxLength": 100 },
+        "limit": { "type": "number" },
+        "currentInvoice": { "type": "number" },
+        "closingDay": { "type": "number" },
+        "dueDay": { "type": "number" },
+        "color": { "type": "string" }
+      },
+      "required": ["userId", "name", "limit"]
+    },
+    "Investment": {
+      "title": "Investment",
+      "description": "Investment portfolio asset",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "assetClass": { "type": "string" },
+        "institution": { "type": "string", "maxLength": 100 },
+        "investedAmount": { "type": "number" },
+        "currentValue": { "type": "number" },
+        "startDate": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["userId", "name", "investedAmount"]
+    },
+    "FinancialGoal": {
+      "title": "FinancialGoal",
+      "description": "Financial target or dream",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "targetDate": { "type": "string" },
+        "startDate": { "type": "string" },
+        "categoryIcon": { "type": "string" },
+        "notes": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["userId", "title", "targetAmount"]
+    },
+    "BudgetLimit": {
+      "title": "BudgetLimit",
+      "description": "Monthly limit per category",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "monthlyLimit": { "type": "number" }
+      },
+      "required": ["userId", "categoryId", "monthlyLimit"]
+    },
+    "EmergencyConfig": {
+      "title": "EmergencyConfig",
+      "description": "Emergency fund configuration",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "targetMonths": { "type": "number" },
+        "monthlyExpenseReference": { "type": "number" },
+        "customTargetAmount": { "type": "number" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["userId", "currentBalance"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "User transactions"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/BankAccount" },
+      "description": "User bank accounts"
+    },
+    "/users/{userId}/creditCards/{cardId}": {
+      "schema": { "$ref": "#/entities/CreditCard" },
+      "description": "User credit cards"
+    },
+    "/users/{userId}/investments/{investmentId}": {
+      "schema": { "$ref": "#/entities/Investment" },
+      "description": "User investments"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": { "$ref": "#/entities/FinancialGoal" },
+      "description": "User goals"
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/BudgetLimit" },
+      "description": "User category budgets"
+    },
+    "/users/{userId}/emergencyConfig/main": {
+      "schema": { "$ref": "#/entities/EmergencyConfig" },
+      "description": "User emergency fund config"
+    }
+  }
+}
