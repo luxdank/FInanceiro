@@ -22,6 +22,10 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
+  Smartphone,
+  Share2,
+  Check,
+  Copy,
 } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
 import { Transaction, TransactionType } from '../../types/finance';
@@ -45,7 +49,10 @@ export const CoupleRoutineView: React.FC<CoupleRoutineViewProps> = ({
     deleteTransaction,
     selectedMonth,
     setSelectedMonth,
+    syncCode,
   } = useFinance();
+
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Quick Transaction Form State
   const [type, setType] = useState<TransactionType>('expense');
@@ -309,6 +316,54 @@ export const CoupleRoutineView: React.FC<CoupleRoutineViewProps> = ({
               <span>Ver Modo Completo</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Sincronização Celular & PC em Tempo Real */}
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/90 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+            <Smartphone className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-emerald-950">
+                Sincronizado com Celular & PC
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
+            <p className="text-[11px] text-emerald-800">
+              O que você registrar no celular ou no PC aparece na mesma hora para {coupleConfig.partner1Name} e {coupleConfig.partner2Name}.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <div className="px-2.5 py-1 bg-white border border-emerald-300 rounded-xl text-center font-mono font-bold text-xs text-blue-700 shadow-2xs">
+            {syncCode}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}${window.location.pathname}?sync=${syncCode}`;
+              navigator.clipboard?.writeText(url);
+              setCopiedLink(true);
+              setTimeout(() => setCopiedLink(false), 2500);
+            }}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>Link Copiado!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Enviar para Celular</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 

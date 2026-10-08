@@ -62,5 +62,14 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
     }
+
+    // Shared Couple / Family synchronization space allowing PC and mobile to sync seamlessly
+    match /couples/{coupleId} {
+      allow read, write: if isSignedIn();
+
+      match /{document=**} {
+        allow read, write: if isSignedIn();
+      }
+    }
   }
 }

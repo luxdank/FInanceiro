@@ -15,6 +15,7 @@ import {
   Settings,
   X,
   SlidersHorizontal,
+  Smartphone,
 } from 'lucide-react';
 import { TabType } from './Sidebar';
 import { useFinance } from '../../context/FinanceContext';
@@ -23,14 +24,16 @@ interface MobileNavProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   onOpenNewTransaction: () => void;
+  onOpenSyncDevices?: () => void;
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({
   activeTab,
   setActiveTab,
   onOpenNewTransaction,
+  onOpenSyncDevices,
 }) => {
-  const { coupleConfig, updateCoupleConfig } = useFinance();
+  const { coupleConfig, updateCoupleConfig, syncCode } = useFinance();
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const isSimple = coupleConfig.appMode === 'couple_simple';
 
@@ -186,6 +189,35 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                 Ativar
               </button>
             </div>
+
+            {/* Sync Phone with PC button */}
+            {onOpenSyncDevices && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  onOpenSyncDevices();
+                }}
+                className="w-full p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-left cursor-pointer hover:bg-emerald-100/50 transition-colors shadow-2xs"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-950 block">
+                      Sincronizar Celular com PC
+                    </span>
+                    <span className="text-[11px] text-emerald-700">
+                      Ver contas cadastradas no computador
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono font-extrabold bg-emerald-200/80 px-2 py-1 rounded text-emerald-900 shrink-0">
+                  {syncCode}
+                </span>
+              </button>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5">
               {moreItems.map((item) => {

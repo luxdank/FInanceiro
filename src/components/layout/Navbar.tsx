@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Cloud,
   Heart,
+  Smartphone,
 } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -18,12 +19,14 @@ interface NavbarProps {
   onOpenNewTransaction: () => void;
   onOpenAlerts: () => void;
   unreadAlertsCount: number;
+  onOpenSyncDevices?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewTransaction,
   onOpenAlerts,
   unreadAlertsCount,
+  onOpenSyncDevices,
 }) => {
   const {
     period,
@@ -33,6 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     lastSyncTime,
     coupleConfig,
     updateCoupleConfig,
+    syncCode,
   } = useFinance();
   const { user, logout, openAuthModal, firebaseUser } = useAuth();
   const isSimple = coupleConfig.appMode === 'couple_simple';
@@ -166,25 +170,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Section: Firebase Status + Quick Add + Notification Bell + User Profile */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Firebase Cloud Sync Badge */}
-          {firebaseUser && !firebaseUser.isAnonymous ? (
-            <div
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold select-none"
-              title={`Sincronizado no Firestore (${lastSyncTime || 'Agora'})`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Firebase Conectado</span>
-            </div>
-          ) : (
-            <button
-              onClick={openAuthModal}
-              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-[11px] font-semibold transition-colors cursor-pointer"
-              title="Clique para conectar sua conta do Google e salvar no Firestore"
-            >
-              <Cloud className="w-3.5 h-3.5 text-blue-600" />
-              <span>Salvar no Firebase</span>
-            </button>
-          )}
+          {/* Real-time PC & Mobile Sync Button (Visible on mobile & desktop) */}
+          <button
+            onClick={onOpenSyncDevices}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-200/90 text-emerald-800 text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+            title={`Sincronização Ativa (Chave: ${syncCode}). Clique para abrir QR Code ou link para celular.`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <Smartphone className="w-3.5 h-3.5 text-emerald-700 hidden xs:inline" />
+            <span>Sincronizar Celular</span>
+            <span className="font-mono text-[10px] bg-emerald-200/70 px-1 rounded text-emerald-900 hidden md:inline">
+              {syncCode}
+            </span>
+          </button>
 
           {/* Quick New Transaction Button (Desktop / Tablet - mobile uses FAB) */}
           <button

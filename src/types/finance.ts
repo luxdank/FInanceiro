@@ -72,6 +72,7 @@ export interface CoupleConfig {
   partner1Name: string;
   partner2Name: string;
   appMode: 'couple_simple' | 'advanced';
+  syncCode?: string;
 }
 
 export interface EmergencyFundRecord {

@@ -55,12 +55,16 @@ interface FinanceContextType {
   selectedMonth: string;
   isSyncing: boolean;
   lastSyncTime: string | null;
+  syncCode: string;
+  isCloudConnected: boolean;
+
+  // Actions - Sync
+  setSyncCode: (code: string) => Promise<void>;
+  generateNewSyncCode: () => string;
+  syncAllToFirebase: () => Promise<void>;
 
   // Actions - Couple Config
   updateCoupleConfig: (config: Partial<CoupleConfig>) => Promise<void>;
-
-  // Actions - Sync
-  syncAllToFirebase: () => Promise<void>;
 
   // Actions - Filters
   setPeriod: (period: PeriodFilter) => void;
@@ -233,6 +237,52 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   });
 
+  // Couple / Multi-Device Synchronization Code
+  const [syncCode, setSyncCodeState] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const urlSync = params.get('sync');
+        if (urlSync && urlSync.trim()) {
+          const clean = urlSync.trim().toUpperCase();
+          localStorage.setItem('finanza_sync_code_v1', clean);
+          return clean;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const saved = localStorage.getItem('finanza_sync_code_v1');
+    if (saved && saved.trim()) {
+      return saved.trim().toUpperCase();
+    }
+
+    const newCode = `CASAL-${Math.floor(1000 + Math.random() * 9000)}`;
+    localStorage.setItem('finanza_sync_code_v1', newCode);
+    return newCode;
+  });
+
+  const setSyncCode = async (code: string) => {
+    const clean = code.trim().toUpperCase();
+    setSyncCodeState(clean);
+    localStorage.setItem('finanza_sync_code_v1', clean);
+  };
+
+  const generateNewSyncCode = () => {
+    const newCode = `CASAL-${Math.floor(1000 + Math.random() * 9000)}`;
+    setSyncCodeState(newCode);
+    localStorage.setItem('finanza_sync_code_v1', newCode);
+    return newCode;
+  };
+
+  // Active path in Firestore for shared couple & multi-device sync
+  const basePath = syncCode
+    ? `couples/${syncCode}`
+    : firebaseUser
+    ? `users/${firebaseUser.uid}`
+    : 'couples/CASAL-DEFAULT';
+
   // Filters
   const [period, setPeriod] = useState<PeriodFilter>('current_month');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonthString());
@@ -282,20 +332,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('finanza_couple_config_v1', JSON.stringify(coupleConfig));
   }, [coupleConfig]);
 
-  // Firestore real-time synchronization listeners
+  // Firestore real-time synchronization listeners across PC and Phone
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!basePath) return;
     setIsSyncing(true);
 
-    const txPath = `users/${firebaseUser.uid}/transactions`;
-    const accPath = `users/${firebaseUser.uid}/accounts`;
-    const cardPath = `users/${firebaseUser.uid}/creditCards`;
-    const invPath = `users/${firebaseUser.uid}/investments`;
-    const goalPath = `users/${firebaseUser.uid}/goals`;
-    const bgtPath = `users/${firebaseUser.uid}/budgets`;
-    const catPath = `users/${firebaseUser.uid}/categories`;
-    const emgPath = `users/${firebaseUser.uid}/emergencyHistory`;
-    const emgConfigPath = `users/${firebaseUser.uid}/emergencyConfig`;
+    const txPath = `${basePath}/transactions`;
+    const accPath = `${basePath}/accounts`;
+    const cardPath = `${basePath}/creditCards`;
+    const invPath = `${basePath}/investments`;
+    const goalPath = `${basePath}/goals`;
+    const bgtPath = `${basePath}/budgets`;
+    const catPath = `${basePath}/categories`;
+    const emgPath = `${basePath}/emergencyHistory`;
+    const emgConfigPath = `${basePath}/emergencyConfig`;
+    const coupleDocPath = `${basePath}/settings/couple_config`;
 
     // 1. Transactions
     const unsubTx = onSnapshot(
@@ -305,9 +356,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const list: Transaction[] = [];
           snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Transaction));
           setTransactions(list.sort((a, b) => b.date.localeCompare(a.date)));
+        } else {
+          // If remote Firestore collection is empty, check if PC already has transactions in local storage to upload
+          try {
+            const saved = localStorage.getItem('finanza_transactions_v2');
+            const localList: Transaction[] = saved ? JSON.parse(saved) : [];
+            if (localList.length > 0) {
+              localList.forEach((tx) => {
+                setDoc(doc(db, txPath, tx.id), tx).catch(console.warn);
+              });
+            }
+          } catch (e) {
+            console.warn(e);
+          }
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, txPath)
+      (err) => console.warn('Sync transactions note:', err.message)
     );
 
     // 2. Accounts
@@ -318,9 +382,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const list: BankAccount[] = [];
           snap.forEach((d) => list.push({ ...d.data(), id: d.id } as BankAccount));
           setAccounts(list);
+        } else {
+          // If remote collection is empty, auto-upload accounts registered on PC
+          try {
+            const saved = localStorage.getItem('finanza_accounts_v2');
+            const localList: BankAccount[] = saved ? JSON.parse(saved) : [];
+            if (localList.length > 0) {
+              localList.forEach((acc) => {
+                setDoc(doc(db, accPath, acc.id), acc).catch(console.warn);
+              });
+            }
+          } catch (e) {
+            console.warn(e);
+          }
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, accPath)
+      (err) => console.warn('Sync accounts note:', err.message)
     );
 
     // 3. Credit Cards
@@ -333,7 +410,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setCreditCards(list);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, cardPath)
+      (err) => console.warn('Sync cards note:', err.message)
     );
 
     // 4. Investments
@@ -346,7 +423,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setInvestments(list);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, invPath)
+      (err) => console.warn('Sync investments note:', err.message)
     );
 
     // 5. Goals
@@ -357,9 +434,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const list: FinancialGoal[] = [];
           snap.forEach((d) => list.push({ ...d.data(), id: d.id } as FinancialGoal));
           setGoals(list);
+        } else {
+          try {
+            const saved = localStorage.getItem('finanza_goals_v2');
+            const localList: FinancialGoal[] = saved ? JSON.parse(saved) : [];
+            if (localList.length > 0) {
+              localList.forEach((g) => {
+                setDoc(doc(db, goalPath, g.id), g).catch(console.warn);
+              });
+            }
+          } catch (e) {
+            console.warn(e);
+          }
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, goalPath)
+      (err) => console.warn('Sync goals note:', err.message)
     );
 
     // 6. Budgets
@@ -372,7 +461,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setBudgets(list);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, bgtPath)
+      (err) => console.warn('Sync budgets note:', err.message)
     );
 
     // 7. Categories (Custom)
@@ -388,34 +477,34 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           });
         }
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, catPath)
+      (err) => console.warn('Sync categories note:', err.message)
     );
 
     // 8. Emergency Config
     const unsubEmgConfig = onSnapshot(
-      doc(db, `users/${firebaseUser.uid}/emergencyConfig`, 'main'),
+      doc(db, `${basePath}/emergencyConfig`, 'main'),
       (snap) => {
         if (snap.exists()) {
           setEmergencyConfig(snap.data() as EmergencyFundConfig);
         }
       },
-      (err) => handleFirestoreError(err, OperationType.GET, emgConfigPath)
+      (err) => console.warn('Sync emergency note:', err.message)
     );
 
     // 9. Couple Config
-    const coupleDocPath = `users/${firebaseUser.uid}/settings/couple_config`;
     const unsubCoupleConfig = onSnapshot(
-      doc(db, `users/${firebaseUser.uid}/settings`, 'couple_config'),
+      doc(db, coupleDocPath),
       (snap) => {
         if (snap.exists()) {
           const data = snap.data() as Partial<CoupleConfig>;
           setCoupleConfig((prev) => ({ ...prev, ...data }));
         }
       },
-      (err) => handleFirestoreError(err, OperationType.GET, coupleDocPath)
+      (err) => console.warn('Sync couple settings note:', err.message)
     );
 
     setIsSyncing(false);
+    setLastSyncTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
 
     return () => {
       unsubTx();
@@ -428,7 +517,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubEmgConfig();
       unsubCoupleConfig();
     };
-  }, [firebaseUser]);
+  }, [basePath]);
 
   const updateCoupleConfig = async (newConfig: Partial<CoupleConfig>) => {
     setCoupleConfig((prev) => {
@@ -437,16 +526,16 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return updated;
     });
 
-    if (firebaseUser) {
-      const coupleDocPath = `users/${firebaseUser.uid}/settings/couple_config`;
+    if (basePath) {
+      const coupleDocPath = `${basePath}/settings/couple_config`;
       try {
         await setDoc(
-          doc(db, `users/${firebaseUser.uid}/settings`, 'couple_config'),
+          doc(db, coupleDocPath),
           newConfig,
           { merge: true }
         );
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, coupleDocPath);
+        console.warn('Update couple note:', err);
       }
     }
   };
@@ -514,13 +603,42 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setTransactions((prev) => [newTx, ...prev]);
 
-    // Firestore sync
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/transactions/${id}`;
+    // Firestore real-time sync across devices
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/transactions`, id), newTx);
+        await setDoc(doc(db, `${basePath}/transactions`, id), newTx);
+
+        // Also sync updated account balance directly to Firestore
+        if (newTx.accountId) {
+          const targetAcc = accounts.find((a) => a.id === newTx.accountId);
+          if (targetAcc) {
+            let nextBal = targetAcc.balance;
+            if (newTx.type === 'income' || newTx.type === 'emergency_withdraw') {
+              nextBal += newTx.amount;
+            } else if (newTx.type === 'expense' || newTx.type === 'emergency_deposit') {
+              nextBal -= newTx.amount;
+            }
+            await setDoc(
+              doc(db, `${basePath}/accounts`, targetAcc.id),
+              { ...targetAcc, balance: nextBal },
+              { merge: true }
+            );
+          }
+        }
+
+        // Also sync updated card invoice to Firestore
+        if (newTx.creditCardId && newTx.type === 'expense') {
+          const targetCard = creditCards.find((c) => c.id === newTx.creditCardId);
+          if (targetCard) {
+            await setDoc(
+              doc(db, `${basePath}/creditCards`, targetCard.id),
+              { ...targetCard, currentInvoice: targetCard.currentInvoice + newTx.amount },
+              { merge: true }
+            );
+          }
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Sync addTransaction error:', err);
       }
     }
   };
@@ -530,12 +648,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((item) => (item.id === id ? { ...item, ...updated } : item))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/transactions/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/transactions`, id), updated, { merge: true });
+        await setDoc(doc(db, `${basePath}/transactions`, id), updated, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update transaction note:', err);
       }
     }
   };
@@ -543,12 +660,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteTransaction = async (id: string) => {
     setTransactions((prev) => prev.filter((item) => item.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/transactions/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/transactions`, id));
+        await deleteDoc(doc(db, `${basePath}/transactions`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete transaction note:', err);
       }
     }
   };
@@ -562,12 +678,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     setCategories((prev) => [...prev, newCat]);
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/categories/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/categories`, id), newCat);
+        await setDoc(doc(db, `${basePath}/categories`, id), newCat);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Add category note:', err);
       }
     }
   };
@@ -577,12 +692,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((c) => (c.id === id ? { ...c, ...cat } : c))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/categories/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/categories`, id), cat, { merge: true });
+        await setDoc(doc(db, `${basePath}/categories`, id), cat, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update category note:', err);
       }
     }
   };
@@ -590,12 +704,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteCategory = async (id: string) => {
     setCategories((prev) => prev.filter((c) => c.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/categories/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/categories`, id));
+        await deleteDoc(doc(db, `${basePath}/categories`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete category note:', err);
       }
     }
   };
@@ -605,12 +718,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newAcc: BankAccount = { ...acc, id };
     setAccounts((prev) => [...prev, newAcc]);
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/accounts/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/accounts`, id), newAcc);
+        await setDoc(doc(db, `${basePath}/accounts`, id), newAcc);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Add account note:', err);
       }
     }
   };
@@ -620,12 +732,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((a) => (a.id === id ? { ...a, ...acc } : a))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/accounts/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/accounts`, id), acc, { merge: true });
+        await setDoc(doc(db, `${basePath}/accounts`, id), acc, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update account note:', err);
       }
     }
   };
@@ -633,12 +744,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteAccount = async (id: string) => {
     setAccounts((prev) => prev.filter((a) => a.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/accounts/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/accounts`, id));
+        await deleteDoc(doc(db, `${basePath}/accounts`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete account note:', err);
       }
     }
   };
@@ -648,12 +758,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newCard: CreditCard = { ...card, id };
     setCreditCards((prev) => [...prev, newCard]);
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/creditCards/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/creditCards`, id), newCard);
+        await setDoc(doc(db, `${basePath}/creditCards`, id), newCard);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Add card note:', err);
       }
     }
   };
@@ -663,12 +772,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((c) => (c.id === id ? { ...c, ...card } : c))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/creditCards/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/creditCards`, id), card, { merge: true });
+        await setDoc(doc(db, `${basePath}/creditCards`, id), card, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update card note:', err);
       }
     }
   };
@@ -676,12 +784,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteCreditCard = async (id: string) => {
     setCreditCards((prev) => prev.filter((c) => c.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/creditCards/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/creditCards`, id));
+        await deleteDoc(doc(db, `${basePath}/creditCards`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete card note:', err);
       }
     }
   };
@@ -717,12 +824,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateEmergencyConfig = async (config: Partial<EmergencyFundConfig>) => {
     setEmergencyConfig((prev) => ({ ...prev, ...config }));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/emergencyConfig/main`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/emergencyConfig`, 'main'), config, { merge: true });
+        await setDoc(doc(db, `${basePath}/emergencyConfig`, 'main'), config, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Update emergency config note:', err);
       }
     }
   };
@@ -737,12 +843,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
     setInvestments((prev) => [...prev, newInv]);
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/investments/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/investments`, id), newInv);
+        await setDoc(doc(db, `${basePath}/investments`, id), newInv);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Add investment note:', err);
       }
     }
 
@@ -768,12 +873,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((item) => (item.id === id ? { ...item, ...updated } : item))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/investments/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/investments`, id), updated, { merge: true });
+        await setDoc(doc(db, `${basePath}/investments`, id), updated, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update investment value note:', err);
       }
     }
   };
@@ -783,12 +887,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((item) => (item.id === id ? { ...item, ...inv } : item))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/investments/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/investments`, id), inv, { merge: true });
+        await setDoc(doc(db, `${basePath}/investments`, id), inv, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update investment note:', err);
       }
     }
   };
@@ -796,12 +899,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteInvestment = async (id: string) => {
     setInvestments((prev) => prev.filter((item) => item.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/investments/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/investments`, id));
+        await deleteDoc(doc(db, `${basePath}/investments`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete investment note:', err);
       }
     }
   };
@@ -864,12 +966,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return [...prev, newBgt];
     });
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/budgets/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/budgets`, id), newBgt);
+        await setDoc(doc(db, `${basePath}/budgets`, id), newBgt);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Set budget limit note:', err);
       }
     }
   };
@@ -879,12 +980,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const newGoal: FinancialGoal = { ...goal, id, userId };
     setGoals((prev) => [...prev, newGoal]);
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/goals/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/goals`, id), newGoal);
+        await setDoc(doc(db, `${basePath}/goals`, id), newGoal);
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, path);
+        console.warn('Add goal note:', err);
       }
     }
   };
@@ -894,12 +994,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       prev.map((g) => (g.id === id ? { ...g, ...goal } : g))
     );
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/goals/${id}`;
+    if (basePath) {
       try {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/goals`, id), goal, { merge: true });
+        await setDoc(doc(db, `${basePath}/goals`, id), goal, { merge: true });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
+        console.warn('Update goal note:', err);
       }
     }
   };
@@ -907,12 +1006,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteGoal = async (id: string) => {
     setGoals((prev) => prev.filter((g) => g.id !== id));
 
-    if (firebaseUser) {
-      const path = `users/${firebaseUser.uid}/goals/${id}`;
+    if (basePath) {
       try {
-        await deleteDoc(doc(db, `users/${firebaseUser.uid}/goals`, id));
+        await deleteDoc(doc(db, `${basePath}/goals`, id));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
+        console.warn('Delete goal note:', err);
       }
     }
   };
@@ -928,32 +1026,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const syncAllToFirebase = async () => {
-    if (!firebaseUser) return;
+    if (!basePath) return;
     setIsSyncing(true);
     try {
       for (const acc of accounts) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/accounts`, acc.id), acc);
+        await setDoc(doc(db, `${basePath}/accounts`, acc.id), acc);
       }
       for (const card of creditCards) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/creditCards`, card.id), card);
+        await setDoc(doc(db, `${basePath}/creditCards`, card.id), card);
       }
       for (const tx of transactions) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/transactions`, tx.id), tx);
+        await setDoc(doc(db, `${basePath}/transactions`, tx.id), tx);
       }
       for (const inv of investments) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/investments`, inv.id), inv);
+        await setDoc(doc(db, `${basePath}/investments`, inv.id), inv);
       }
       for (const goal of goals) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/goals`, goal.id), goal);
+        await setDoc(doc(db, `${basePath}/goals`, goal.id), goal);
       }
       for (const bgt of budgets) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/budgets`, bgt.id), bgt);
+        await setDoc(doc(db, `${basePath}/budgets`, bgt.id), bgt);
       }
       for (const cat of categories.filter((c) => c.isCustom)) {
-        await setDoc(doc(db, `users/${firebaseUser.uid}/categories`, cat.id), cat);
+        await setDoc(doc(db, `${basePath}/categories`, cat.id), cat);
       }
-      await setDoc(doc(db, `users/${firebaseUser.uid}/emergencyConfig`, 'main'), emergencyConfig);
-      await setDoc(doc(db, `users/${firebaseUser.uid}/settings`, 'couple_config'), coupleConfig, { merge: true });
+      await setDoc(doc(db, `${basePath}/emergencyConfig`, 'main'), emergencyConfig);
+      await setDoc(doc(db, `${basePath}/settings`, 'couple_config'), coupleConfig, { merge: true });
       setLastSyncTime(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       console.error('Error syncing to Firebase:', err);
@@ -1257,10 +1355,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .sort((a, b) => b.total - a.total);
   }, [investments]);
 
-  // Dynamic alerts
+  // Dynamic alerts (Budgets + Savings Goals)
   const alerts = useMemo(() => {
     const list: FinancialAlert[] = [];
 
+    // 1. Budget limits
     budgets.forEach((bgt) => {
       const spent = transactions
         .filter((t) => t.date.startsWith(targetMonth) && t.categoryId === bgt.categoryId && t.type === 'expense')
@@ -1278,11 +1377,47 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           date: new Date().toISOString(),
           linkTab: 'orcamento',
         });
+      } else if (bgt.monthlyLimit > 0 && spent >= bgt.monthlyLimit * 0.85) {
+        list.push({
+          id: `alt-bgt-warn-${bgt.id}`,
+          title: `Atenção: ${catName} em 85% do limite`,
+          message: `Você já gastou R$ ${spent.toFixed(2)} de R$ ${bgt.monthlyLimit.toFixed(2)}.`,
+          type: 'warning',
+          date: new Date().toISOString(),
+          linkTab: 'orcamento',
+        });
+      }
+    });
+
+    // 2. Savings Goals close to being reached (>= 80% and < 100%) or Reached (100%)
+    goals.forEach((goal) => {
+      if (!goal.targetAmount || goal.targetAmount <= 0) return;
+      const progress = (goal.currentAmount / goal.targetAmount) * 100;
+      const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+
+      if (progress >= 100) {
+        list.push({
+          id: `alt-goal-achieved-${goal.id}`,
+          title: `🎉 Meta Conquistada: ${goal.title}!`,
+          message: `Parabéns! Você atingiu 100% da meta "${goal.title}" economizando R$ ${goal.currentAmount.toFixed(2)}.`,
+          type: 'success',
+          date: new Date().toISOString(),
+          linkTab: 'metas',
+        });
+      } else if (progress >= 80) {
+        list.push({
+          id: `alt-goal-near-${goal.id}`,
+          title: `🎯 Meta Quase Atingida: ${goal.title}`,
+          message: `Você já alcançou ${progress.toFixed(0)}% da sua meta de economia! Faltam apenas R$ ${remaining.toFixed(2)} para completar.`,
+          type: 'info',
+          date: new Date().toISOString(),
+          linkTab: 'metas',
+        });
       }
     });
 
     return list;
-  }, [budgets, transactions, targetMonth, categories]);
+  }, [budgets, transactions, targetMonth, categories, goals]);
 
   return (
     <FinanceContext.Provider
@@ -1303,6 +1438,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedMonth,
         isSyncing,
         lastSyncTime,
+        syncCode,
+        isCloudConnected: true,
+        setSyncCode,
+        generateNewSyncCode,
         updateCoupleConfig,
         syncAllToFirebase,
         setPeriod,

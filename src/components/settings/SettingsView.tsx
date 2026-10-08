@@ -19,6 +19,10 @@ import {
   Check,
   Heart,
   SlidersHorizontal,
+  Smartphone,
+  Share2,
+  Copy,
+  QrCode,
 } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +55,8 @@ export const SettingsView: React.FC = () => {
     syncAllToFirebase,
     coupleConfig,
     updateCoupleConfig,
+    syncCode,
+    setSyncCode,
   } = useFinance();
   const { user, firebaseUser, openAuthModal } = useAuth();
 
@@ -527,6 +533,52 @@ export const SettingsView: React.FC = () => {
                 <span>{connectionStatus}</span>
               </div>
             )}
+          </div>
+
+          {/* Sincronização Celular & PC Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">
+                  Sincronização Direta entre Celular & PC
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Compartilhe suas contas e lançamentos com seu celular ou esposa em tempo real
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div>
+                <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider block">
+                  Código de Acesso do Casal
+                </span>
+                <span className="text-base font-mono font-black text-blue-700">
+                  {syncCode}
+                </span>
+                <p className="text-[11px] text-emerald-700 mt-0.5">
+                  Qualquer aparelho conectado a esta chave compartilha os mesmos lançamentos.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}${window.location.pathname}?sync=${syncCode}`;
+                    navigator.clipboard?.writeText(url);
+                    showToast('Link de acesso para celular copiado com sucesso!');
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Copiar Link do Celular</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

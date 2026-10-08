@@ -139,6 +139,26 @@
     "/users/{userId}/emergencyConfig/main": {
       "schema": { "$ref": "#/entities/EmergencyConfig" },
       "description": "User emergency fund config"
+    },
+    "/couples/{coupleId}/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Shared couple transactions"
+    },
+    "/couples/{coupleId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/BankAccount" },
+      "description": "Shared couple bank accounts"
+    },
+    "/couples/{coupleId}/creditCards/{cardId}": {
+      "schema": { "$ref": "#/entities/CreditCard" },
+      "description": "Shared couple credit cards"
+    },
+    "/couples/{coupleId}/goals/{goalId}": {
+      "schema": { "$ref": "#/entities/FinancialGoal" },
+      "description": "Shared couple goals"
+    },
+    "/couples/{coupleId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/BudgetLimit" },
+      "description": "Shared couple budgets"
     }
   }
 }

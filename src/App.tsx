@@ -23,6 +23,7 @@ import { TransactionModal } from './components/transactions/TransactionModal';
 import { EmergencyDepositModal } from './components/emergency/EmergencyDepositModal';
 import { AlertsDrawer } from './components/alerts/AlertsDrawer';
 import { AuthModal } from './components/auth/AuthModal';
+import { SyncDevicesModal } from './components/sync/SyncDevicesModal';
 import { Transaction, TransactionType } from './types/finance';
 
 function MainAppContent() {
@@ -37,6 +38,7 @@ function MainAppContent() {
   const [emergencyModalType, setEmergencyModalType] = useState<'deposit' | 'withdraw'>('deposit');
 
   const [isAlertsDrawerOpen, setIsAlertsDrawerOpen] = useState(false);
+  const [isSyncDevicesModalOpen, setIsSyncDevicesModalOpen] = useState(false);
 
   const { alerts, coupleConfig, updateCoupleConfig } = useFinance();
   const isSimple = coupleConfig.appMode === 'couple_simple';
@@ -70,6 +72,7 @@ function MainAppContent() {
         onOpenNewTransaction={() => handleOpenNewTransaction('expense')}
         onOpenAlerts={() => setIsAlertsDrawerOpen(true)}
         unreadAlertsCount={alerts.length}
+        onOpenSyncDevices={() => setIsSyncDevicesModalOpen(true)}
       />
 
       {/* Main Layout Area */}
@@ -130,6 +133,7 @@ function MainAppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenNewTransaction={() => handleOpenNewTransaction('expense')}
+        onOpenSyncDevices={() => setIsSyncDevicesModalOpen(true)}
       />
 
       {/* Global Modals & Drawers */}
@@ -153,6 +157,11 @@ function MainAppContent() {
         isOpen={isAlertsDrawerOpen}
         onClose={() => setIsAlertsDrawerOpen(false)}
         onNavigate={setActiveTab}
+      />
+
+      <SyncDevicesModal
+        isOpen={isSyncDevicesModalOpen}
+        onClose={() => setIsSyncDevicesModalOpen(false)}
       />
 
       <AuthModal />
