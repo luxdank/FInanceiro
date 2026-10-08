@@ -253,7 +253,7 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
             <form onSubmit={handleConnectCode} className="flex gap-2">
               <input
                 type="text"
-                placeholder="Ex: CASAL-1234"
+                placeholder="Ex: CASAL-FINANZA"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value)}
                 className="flex-1 px-3.5 py-2.5 bg-white rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono font-bold uppercase text-xs"
@@ -267,6 +267,19 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({ isOpen, onCl
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </form>
+
+            {syncCode !== 'CASAL-FINANZA' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await setSyncCode('CASAL-FINANZA');
+                  setStatusMessage('Código restaurado para CASAL-FINANZA!');
+                }}
+                className="text-[11px] text-blue-600 hover:text-blue-800 underline font-semibold mt-1 cursor-pointer block"
+              >
+                Voltar para o código padrão compartilhado (CASAL-FINANZA)
+              </button>
+            )}
           </div>
 
           {/* Option 3: Manual Full Force-Sync */}

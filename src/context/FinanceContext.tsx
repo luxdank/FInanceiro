@@ -238,6 +238,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   // Couple / Multi-Device Synchronization Code
+  const DEFAULT_COUPLE_CODE = 'CASAL-FINANZA';
+
   const [syncCode, setSyncCodeState] = useState<string>(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -254,17 +256,18 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const saved = localStorage.getItem('finanza_sync_code_v1');
-    if (saved && saved.trim()) {
+    // If user has a custom code (not a random auto-generated 4-digit code), keep it
+    if (saved && saved.trim() && saved !== 'CASAL-DEFAULT' && !/^CASAL-\d{4}$/.test(saved.trim())) {
       return saved.trim().toUpperCase();
     }
 
-    const newCode = `CASAL-${Math.floor(1000 + Math.random() * 9000)}`;
-    localStorage.setItem('finanza_sync_code_v1', newCode);
-    return newCode;
+    // Default to shared couple space so PC and Phone sync immediately without any configuration
+    localStorage.setItem('finanza_sync_code_v1', DEFAULT_COUPLE_CODE);
+    return DEFAULT_COUPLE_CODE;
   });
 
   const setSyncCode = async (code: string) => {
-    const clean = code.trim().toUpperCase();
+    const clean = code.trim().toUpperCase() || DEFAULT_COUPLE_CODE;
     setSyncCodeState(clean);
     localStorage.setItem('finanza_sync_code_v1', clean);
   };
@@ -281,7 +284,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ? `couples/${syncCode}`
     : firebaseUser
     ? `users/${firebaseUser.uid}`
-    : 'couples/CASAL-DEFAULT';
+    : `couples/${DEFAULT_COUPLE_CODE}`;
 
   // Filters
   const [period, setPeriod] = useState<PeriodFilter>('current_month');
@@ -387,7 +390,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           try {
             const saved = localStorage.getItem('finanza_accounts_v2');
             const localList: BankAccount[] = saved ? JSON.parse(saved) : [];
-            if (localList.length > 0) {
+            const isDummy =
+              localList.length === 1 &&
+              localList[0].id === 'acc-1' &&
+              localList[0].balance === 0 &&
+              localList[0].name.includes('Conta Corrente Principal');
+
+            if (localList.length > 0 && !isDummy) {
               localList.forEach((acc) => {
                 setDoc(doc(db, accPath, acc.id), acc).catch(console.warn);
               });
@@ -517,6 +526,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubEmgConfig();
       unsubCoupleConfig();
     };
+  }, [basePath]);
+
+  // Auto-sync initial data from PC to Firestore on startup
+  useEffect(() => {
+    if (!basePath) return;
+    try {
+      const savedAccounts = localStorage.getItem('finanza_accounts_v2');
+      const localAccs: BankAccount[] = savedAccounts ? JSON.parse(savedAccounts) : [];
+      const hasRealAccounts =
+        localAccs.length > 0 &&
+        !(
+          localAccs.length === 1 &&
+          localAccs[0].id === 'acc-1' &&
+          localAccs[0].balance === 0 &&
+          localAccs[0].name.includes('Conta Corrente Principal')
+        );
+
+      const savedTxs = localStorage.getItem('finanza_transactions_v2');
+      const localTxs = savedTxs ? JSON.parse(savedTxs) : [];
+
+      if (hasRealAccounts || localTxs.length > 0) {
+        syncAllToFirebase().catch(console.warn);
+      }
+    } catch {
+      // ignore
+    }
   }, [basePath]);
 
   const updateCoupleConfig = async (newConfig: Partial<CoupleConfig>) => {

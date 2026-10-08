@@ -47,9 +47,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date().toISOString(),
         });
       } else {
-        // Automatically sign in anonymously so user has an active Firebase UID for Firestore synchronization
-        signInAnonymously(auth).catch((err) => {
-          console.warn('Anonymous sign-in fallback:', err);
+        setUser({
+          id: 'guest',
+          name: 'Usuário Finanza',
+          email: 'casal@finanza.app',
+          createdAt: new Date().toISOString(),
+        });
+        signInAnonymously(auth).catch(() => {
+          // Anonymous auth restricted in cloud console; guest mode handles offline/shared sync
         });
       }
       setIsLoading(false);

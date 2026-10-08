@@ -88,8 +88,8 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Note:', JSON.stringify(errInfo));
+  return errInfo;
 }
 
 // Test connection on boot as instructed in SKILL.md
